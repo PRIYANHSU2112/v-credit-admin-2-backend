@@ -1,0 +1,232 @@
+{
+  "info": {
+    "name": "VLocker Enterprise Mobile / MDM",
+    "description": "Backend APIs behind the Enterprise VLocker mobile app: auth (JWT + refresh), activation, device registration, heartbeat, remote commands, policies and the admin MDM console.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3005" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "deviceId", "value": "990000111122223" },
+    { "key": "phone", "value": "9812345678" },
+    { "key": "otpCode", "value": "1234" },
+    { "key": "commandRef", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Mobile Auth",
+      "item": [
+        {
+          "name": "Request OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/auth/request-otp", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "auth", "request-otp"] },
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\"\n}" }
+          }
+        },
+        {
+          "name": "Login (phone + OTP)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data || {};",
+              "if (d.accessToken) pm.collectionVariables.set('accessToken', d.accessToken);",
+              "if (d.refreshToken) pm.collectionVariables.set('refreshToken', d.refreshToken);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"phone\": \"{{phone}}\",\n  \"otpCode\": \"{{otpCode}}\",\n  \"deviceId\": \"{{deviceId}}\"\n}" }
+          }
+        },
+        {
+          "name": "Refresh token",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data || {};",
+              "if (d.accessToken) pm.collectionVariables.set('accessToken', d.accessToken);",
+              "if (d.refreshToken) pm.collectionVariables.set('refreshToken', d.refreshToken);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "auth", "refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "auth", "logout"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mobile Device (auth)",
+      "item": [
+        {
+          "name": "Bootstrap / me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/me", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "me"] }
+          }
+        },
+        {
+          "name": "Register device",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/device/register", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "device", "register"] },
+            "body": { "mode": "raw", "raw": "{\n  \"imei\": \"{{deviceId}}\",\n  \"androidId\": \"andr-0001\",\n  \"fcmToken\": \"\",\n  \"deviceModel\": \"Pixel 7\",\n  \"brand\": \"Google\",\n  \"manufacturer\": \"Google\",\n  \"androidVersion\": \"14\",\n  \"isRooted\": false,\n  \"isEmulator\": false,\n  \"appVersion\": \"1.0.0\",\n  \"permissions\": { \"location\": true, \"overlay\": true }\n}" }
+          }
+        },
+        {
+          "name": "Activate key on device",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/activate", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "activate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"imei\": \"{{deviceId}}\",\n  \"androidId\": \"andr-0001\",\n  \"fcmToken\": \"\",\n  \"deviceModel\": \"Pixel 7\",\n  \"brand\": \"Google\",\n  \"androidVersion\": \"14\",\n  \"isRooted\": false,\n  \"isEmulator\": false,\n  \"appVersion\": \"1.0.0\"\n}" }
+          }
+        },
+        {
+          "name": "Get policy",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/device/{{deviceId}}/policy", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "device", "{{deviceId}}", "policy"] }
+          }
+        },
+        {
+          "name": "Heartbeat",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/heartbeat", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "heartbeat"] },
+            "body": { "mode": "raw", "raw": "{\n  \"deviceId\": \"{{deviceId}}\",\n  \"battery\": 88,\n  \"networkType\": \"wifi\",\n  \"currentScreen\": \"Home\",\n  \"appVersion\": \"1.0.0\"\n}" }
+          }
+        },
+        {
+          "name": "Poll commands",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const arr = (pm.response.json().data)||[];",
+              "if (arr[0] && arr[0].commandRef) pm.collectionVariables.set('commandRef', arr[0].commandRef);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/device/{{deviceId}}/commands", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "device", "{{deviceId}}", "commands"] }
+          }
+        },
+        {
+          "name": "Ack command",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/commands/ack", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "commands", "ack"] },
+            "body": { "mode": "raw", "raw": "{\n  \"commandRef\": \"{{commandRef}}\",\n  \"status\": \"SUCCESS\",\n  \"resultMessage\": \"done\",\n  \"executionTimeMs\": 120\n}" }
+          }
+        },
+        {
+          "name": "Device status",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mobile/device/{{deviceId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "mobile", "device", "{{deviceId}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin MDM Console",
+      "item": [
+        {
+          "name": "Enterprise login (admin token)",
+          "event": [
+            { "listen": "test", "script": { "exec": [
+              "const d = pm.response.json().data || {};",
+              "if (d.token) pm.collectionVariables.set('adminToken', d.token);"
+            ], "type": "text/javascript" } }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"dealer1@vlocker.com\",\n  \"password\": \"Dealer@123\"\n}" }
+          }
+        },
+        {
+          "name": "List devices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/devices", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "devices"] }
+          }
+        },
+        {
+          "name": "Issue command (LOCK_DEVICE)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/commands", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "commands"] },
+            "body": { "mode": "raw", "raw": "{\n  \"deviceId\": \"{{deviceId}}\",\n  \"type\": \"LOCK_DEVICE\",\n  \"payload\": { \"message\": \"EMI overdue\" }\n}" }
+          }
+        },
+        {
+          "name": "Blacklist device",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/devices/{{deviceId}}/blacklist", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "devices", "{{deviceId}}", "blacklist"] },
+            "body": { "mode": "raw", "raw": "{\n  \"blacklisted\": true,\n  \"reason\": \"stolen\"\n}" }
+          }
+        },
+        {
+          "name": "Upsert policy",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/policies", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "policies"] },
+            "body": { "mode": "raw", "raw": "{\n  \"scope\": \"dealer\",\n  \"camera\": true,\n  \"appBlacklist\": [\"com.example.blocked\"]\n}" }
+          }
+        },
+        {
+          "name": "List policies",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/policies", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "policies"] }
+          }
+        },
+        {
+          "name": "Activation history",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/activation-history", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "activation-history"] }
+          }
+        },
+        {
+          "name": "Run expiry sweep (super_admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/mdm/expiry-sweep", "host": ["{{baseUrl}}"], "path": ["api", "mdm", "expiry-sweep"] }
+          }
+        }
+      ]
+    }
+  ]
+}

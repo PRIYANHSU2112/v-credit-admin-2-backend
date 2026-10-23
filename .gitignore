@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Environment files & Secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+secrets/
+*.pem
+*.key
+
+# Logs & System
+*.log
+.DS_Store
