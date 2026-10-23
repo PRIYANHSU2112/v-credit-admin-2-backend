@@ -385,10 +385,30 @@ const deleteUser = async (req, res) => {
 
 const updateUserByAdmin = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const {
+      name,
+      email,
+      password,
+      phone,
+      agencyName,
+      address,
+      city,
+      state,
+      district,
+      pincode,
+      gstNumber,
+    } = req.body;
     const updateData = {};
     if (name) updateData.name = name;
     if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (agencyName) updateData.agencyName = agencyName;
+    if (address) updateData.address = address;
+    if (city) updateData.city = city;
+    if (state) updateData.state = state;
+    if (district) updateData.district = district;
+    if (pincode) updateData.pincode = pincode;
+    if (gstNumber) updateData.gstNumber = gstNumber;
     if (password) {
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(password, salt);

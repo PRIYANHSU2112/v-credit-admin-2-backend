@@ -46,6 +46,7 @@ router.get("/notifications", ctrl.getNotifications);
 router.get("/users", ctrl.getEndUsers);
 router.get("/territories", ctrl.getTerritories);
 router.get("/commissions", ctrl.getCommissions);
+router.patch("/commissions/rates", requireEnterpriseRole("super_admin"), ctrl.updateCommissionRates);
 router.get("/analytics", ctrl.getAnalytics);
 router.get("/settings", ctrl.getSettings);
 router.patch("/settings", ctrl.updateSettings);

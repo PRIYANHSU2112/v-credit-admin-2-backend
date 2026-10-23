@@ -7,6 +7,7 @@ const Customer = require("../models/Customer.model");
 const Device = require("../models/Device.model");
 const Address = require("../models/CustomerAddress.model");
 const Loan = require("../models/CustomerLoan.model");
+const PlatformSetting = require("../models/PlatformSetting.model");
 const { getGlobalKpis, getScopedKpis, recalculateInventory } = require("../services/inventory.service");
 const {
   generateKeys,
@@ -763,10 +764,19 @@ const getTerritories = async (req, res) => {
 const getCommissions = async (req, res) => {
   try {
     const actor = req.enterpriseUser;
+    let platform = await PlatformSetting.findOne();
+    if (!platform) {
+      platform = await PlatformSetting.create({});
+    }
+
+    const stockistRate = platform.stockistCommissionRate ?? 12;
+    const distributorRate = platform.distributorCommissionRate ?? 8;
+    const dealerRate = platform.dealerCommissionRate ?? 5;
+
     const tiers = [
-      { role: "stockist", tier: "Stockist", rate: 12, prefix: "COM-STK" },
-      { role: "distributor", tier: "Distributor", rate: 8, prefix: "COM-DST" },
-      { role: "dealer", tier: "Dealer", rate: 5, prefix: "COM-DLR" },
+      { role: "stockist", tier: "Stockist", rate: stockistRate, prefix: "COM-STK" },
+      { role: "distributor", tier: "Distributor", rate: distributorRate, prefix: "COM-DST" },
+      { role: "dealer", tier: "Dealer", rate: dealerRate, prefix: "COM-DLR" },
     ];
 
     const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -811,13 +821,58 @@ const getCommissions = async (req, res) => {
       ]);
       commissionTrend.push({
         month: monthNames[d.getMonth()],
-        stockist: stkAct * 12,
-        distributor: dstAct * 8,
-        dealer: dlrAct * 5,
+        stockist: stkAct * stockistRate,
+        distributor: dstAct * distributorRate,
+        dealer: dlrAct * dealerRate,
       });
     }
 
-    return res.json({ success: true, data: { commissions: data, commissionTrend } });
+    return res.json({
+      success: true,
+      data: {
+        commissions: data,
+        commissionTrend,
+        rates: {
+          stockist: stockistRate,
+          distributor: distributorRate,
+          dealer: dealerRate,
+        },
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const updateCommissionRates = async (req, res) => {
+  try {
+    const { stockist, distributor, dealer } = req.body || {};
+    let platform = await PlatformSetting.findOne();
+    if (!platform) {
+      platform = new PlatformSetting();
+    }
+
+    if (stockist !== undefined && !isNaN(Number(stockist)) && Number(stockist) >= 0) {
+      platform.stockistCommissionRate = Number(stockist);
+    }
+    if (distributor !== undefined && !isNaN(Number(distributor)) && Number(distributor) >= 0) {
+      platform.distributorCommissionRate = Number(distributor);
+    }
+    if (dealer !== undefined && !isNaN(Number(dealer)) && Number(dealer) >= 0) {
+      platform.dealerCommissionRate = Number(dealer);
+    }
+
+    await platform.save();
+
+    return res.json({
+      success: true,
+      message: "Commission rates updated successfully",
+      data: {
+        stockist: platform.stockistCommissionRate,
+        distributor: platform.distributorCommissionRate,
+        dealer: platform.dealerCommissionRate,
+      },
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -883,11 +938,16 @@ const getAnalytics = async (req, res) => {
 const getSettings = async (req, res) => {
   try {
     const user = req.enterpriseUser;
-    const [totalKeys, totalUsers, auditCount] = await Promise.all([
+    let [totalKeys, totalUsers, auditCount, platformSettings] = await Promise.all([
       EnterpriseKey.countDocuments({ isDeleted: false }),
       User.countDocuments({ isDeleted: false, enterpriseRole: { $ne: null } }),
       AuditLog.countDocuments({ isDeleted: false }),
+      PlatformSetting.findOne(),
     ]);
+
+    if (!platformSettings) {
+      platformSettings = await PlatformSetting.create({});
+    }
 
     return res.json({
       success: true,
@@ -900,6 +960,17 @@ const getSettings = async (req, res) => {
           entityCode: user.entityCode,
           territory: user.territory,
           city: user.city,
+        },
+        platform: {
+          keyPrice: platformSettings.keyPrice ?? 350,
+          iphoneKeyPrice: platformSettings.iphoneKeyPrice ?? 600,
+          stockistCommissionRate: platformSettings.stockistCommissionRate ?? 12,
+          distributorCommissionRate: platformSettings.distributorCommissionRate ?? 8,
+          dealerCommissionRate: platformSettings.dealerCommissionRate ?? 5,
+          autoLockOnOverdue: platformSettings.autoLockOnOverdue ?? true,
+          gracePeriodDays: platformSettings.gracePeriodDays ?? 3,
+          smsGatewayActive: platformSettings.smsGatewayActive ?? true,
+          whatsappAlerts: platformSettings.whatsappAlerts ?? true,
         },
         stats: {
           totalKeys,
@@ -916,7 +987,21 @@ const getSettings = async (req, res) => {
 const updateSettings = async (req, res) => {
   try {
     const user = req.enterpriseUser;
-    const { name, phone, city, territory } = req.body || {};
+    const {
+      name,
+      phone,
+      city,
+      territory,
+      keyPrice,
+      iphoneKeyPrice,
+      stockistCommissionRate,
+      distributorCommissionRate,
+      dealerCommissionRate,
+      autoLockOnOverdue,
+      gracePeriodDays,
+      smsGatewayActive,
+      whatsappAlerts,
+    } = req.body || {};
 
     if (typeof name === "string" && name.trim()) user.name = name.trim();
     if (typeof phone === "string") user.phone = phone.trim();
@@ -925,9 +1010,26 @@ const updateSettings = async (req, res) => {
 
     await user.save();
 
+    let platform = await PlatformSetting.findOne();
+    if (!platform) {
+      platform = new PlatformSetting();
+    }
+
+    if (keyPrice !== undefined && !isNaN(Number(keyPrice))) platform.keyPrice = Number(keyPrice);
+    if (iphoneKeyPrice !== undefined && !isNaN(Number(iphoneKeyPrice))) platform.iphoneKeyPrice = Number(iphoneKeyPrice);
+    if (stockistCommissionRate !== undefined && !isNaN(Number(stockistCommissionRate))) platform.stockistCommissionRate = Number(stockistCommissionRate);
+    if (distributorCommissionRate !== undefined && !isNaN(Number(distributorCommissionRate))) platform.distributorCommissionRate = Number(distributorCommissionRate);
+    if (dealerCommissionRate !== undefined && !isNaN(Number(dealerCommissionRate))) platform.dealerCommissionRate = Number(dealerCommissionRate);
+    if (autoLockOnOverdue !== undefined) platform.autoLockOnOverdue = Boolean(autoLockOnOverdue);
+    if (gracePeriodDays !== undefined && !isNaN(Number(gracePeriodDays))) platform.gracePeriodDays = Number(gracePeriodDays);
+    if (smsGatewayActive !== undefined) platform.smsGatewayActive = Boolean(smsGatewayActive);
+    if (whatsappAlerts !== undefined) platform.whatsappAlerts = Boolean(whatsappAlerts);
+
+    await platform.save();
+
     return res.json({
       success: true,
-      message: "Settings updated",
+      message: "Settings updated successfully",
       data: {
         profile: {
           name: user.name,
@@ -937,6 +1039,17 @@ const updateSettings = async (req, res) => {
           entityCode: user.entityCode,
           territory: user.territory,
           city: user.city,
+        },
+        platform: {
+          keyPrice: platform.keyPrice,
+          iphoneKeyPrice: platform.iphoneKeyPrice,
+          stockistCommissionRate: platform.stockistCommissionRate,
+          distributorCommissionRate: platform.distributorCommissionRate,
+          dealerCommissionRate: platform.dealerCommissionRate,
+          autoLockOnOverdue: platform.autoLockOnOverdue,
+          gracePeriodDays: platform.gracePeriodDays,
+          smsGatewayActive: platform.smsGatewayActive,
+          whatsappAlerts: platform.whatsappAlerts,
         },
       },
     });
@@ -1305,6 +1418,7 @@ module.exports = {
   getEndUsers,
   getTerritories,
   getCommissions,
+  updateCommissionRates,
   getAnalytics,
   getSettings,
   updateSettings,
