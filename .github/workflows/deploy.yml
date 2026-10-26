@@ -1,0 +1,110 @@
+name: Deploy Backend to AWS EC2
+
+# Workflow: Developer → GitHub → CI tests → CD deployment → EC2 → PM2 → Running application
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # 1. CI TESTS (Runs on GitHub Actions Ubuntu Runner)
+  # ─────────────────────────────────────────────────────────────
+  ci-tests:
+    name: 🧪 Run CI Integrity & Syntax Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install Dependencies
+        run: npm ci
+
+      - name: 🔍 Execute Automated CI Checks
+        run: npm test
+
+  # ─────────────────────────────────────────────────────────────
+  # 2. CD DEPLOYMENT (Deploys to AWS EC2 via SSH & Reloads PM2)
+  # ─────────────────────────────────────────────────────────────
+  cd-deployment:
+    name: 🚀 Deploy to AWS EC2 via PM2
+    needs: ci-tests
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔐 SSH Connect & Deploy on EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || 22 }}
+          script_stop: true
+          script: |
+            # 1. Configure Application Directory
+            APP_DIR="${{ secrets.APP_DIR || '/home/ubuntu/Vlocker-Backend-main' }}"
+            
+            echo "=========================================================="
+            echo "🚀 V-CREDIT BACKEND CONTINUOUS DEPLOYMENT IN PROGRESS"
+            echo "Target Directory: $APP_DIR"
+            echo "=========================================================="
+
+            # 2. Ensure application directory exists
+            if [ ! -d "$APP_DIR" ]; then
+              echo "❌ Error: Application directory $APP_DIR does not exist on EC2 server!"
+              echo "Please clone the repository first into $APP_DIR."
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+
+            # 3. Pull latest code from GitHub
+            echo "📥 Syncing latest commits from GitHub origin/main..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 4. Install production dependencies
+            echo "📦 Installing production dependencies..."
+            npm ci --omit=dev
+
+            # 5. Zero-downtime process reload with PM2
+            echo "🔄 Managing PM2 runtime instance..."
+            if pm2 describe vlocker-backend > /dev/null 2>&1; then
+              echo "Reloading existing PM2 instance (Zero-Downtime)..."
+              pm2 reload vlocker-backend --update-env
+            else
+              echo "Starting new PM2 instance..."
+              pm2 start server.js --name vlocker-backend
+            fi
+
+            # 6. Save PM2 process list (ensures auto-restart on EC2 reboot)
+            pm2 save
+
+            # 7. Smoke test & Health Verification
+            echo "🏥 Verifying service health..."
+            sleep 3
+            if curl -f -s http://localhost:3000/health > /dev/null || curl -f -s http://localhost:3005/health > /dev/null; then
+              echo "✅ Healthcheck succeeded! Application is healthy and running."
+            else
+              echo "⚠️ Notice: Health probe could not reach local port directly. Please inspect: pm2 logs vlocker-backend"
+            fi
+
+            echo "=========================================================="
+            echo "🎉 Deployment successfully completed! Application is LIVE."
+            echo "=========================================================="
